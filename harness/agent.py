@@ -249,6 +249,8 @@ A. PHẢI TÌM TRƯỚC KHI ĐƯỢC PHÉP NÓI "KHÔNG ĐỦ CĂN CỨ".
    chỉ là ghi nhận sự vụ cá nhân bối cảnh, KHÔNG PHẢI quy định hay báo cáo tổng hợp. Nếu câu hỏi hỏi về
    quy định, chính sách, hoặc số liệu thống kê báo cáo, bạn KHÔNG ĐƯỢC chỉ dừng lại ở ticket mà PHẢI
    tìm kiếm văn bản báo cáo hoặc quy định chính thức tương ứng.
+   Đặc biệt chú ý: Khi câu hỏi nhắc đến 'đơn vị hợp tác lần đầu' hoặc 'đối tác mới' mà có nhắc đến 'bên đào tạo giữ thống kê':
+   Chủ đề chuẩn hóa là 'Quy trình làm việc với nhà cung cấp mới'. Bạn PHẢI tìm kiếm với từ khóa 'quy trình làm việc với nhà cung cấp mới báo cáo' hoặc 'nhà cung cấp mới báo cáo' để đọc đúng báo cáo do Phòng Đào tạo lập về các trường hợp này.
 
 B. DÒNG KẾT LUẬN.
    Dòng kết luận phải bắt đầu ngay từ ký tự đầu tiên của dòng bằng nhãn viết
@@ -641,6 +643,8 @@ class ReActAgent:
         self._investigation_nudge_requested = False
         self._contradiction_nudge_requested = False
         self._absent_quote_nudge_requested = False
+        self._unfetched_core_doc_nudge_requested = False
+        self._report_quote_nudge_requested = False
 
     # -- the run -------------------------------------------------------
 
@@ -661,6 +665,8 @@ class ReActAgent:
         self._investigation_nudge_requested = False
         self._contradiction_nudge_requested = False
         self._absent_quote_nudge_requested = False
+        self._unfetched_core_doc_nudge_requested = False
+        self._report_quote_nudge_requested = False
 
         self.trace.emit("agent_start", brief_id=str(brief.get("brief_id", "")))
 
@@ -695,6 +701,11 @@ class ReActAgent:
                     self._investigation_nudge_requested = True
                     ctx.messages.append({"role": "user", "content": investigation_nudge})
                     continue
+                unfetched_nudge = self._needs_unfetched_core_doc_nudge(ctx, parsed.final)
+                if unfetched_nudge:
+                    self._unfetched_core_doc_nudge_requested = True
+                    ctx.messages.append({"role": "user", "content": unfetched_nudge})
+                    continue
                 contradiction_nudge = self._needs_contradiction_nudge(ctx, parsed.final)
                 if contradiction_nudge:
                     self._contradiction_nudge_requested = True
@@ -704,6 +715,11 @@ class ReActAgent:
                 if absent_nudge:
                     self._absent_quote_nudge_requested = True
                     ctx.messages.append({"role": "user", "content": absent_nudge})
+                    continue
+                report_nudge = self._needs_report_quote_nudge(ctx, parsed.final)
+                if report_nudge:
+                    self._report_quote_nudge_requested = True
+                    ctx.messages.append({"role": "user", "content": report_nudge})
                     continue
                 expansion_nudge = self._needs_quote_expansion(ctx, parsed.final)
                 if expansion_nudge:
@@ -753,17 +769,24 @@ class ReActAgent:
         if not cited_docs:
             return None
         has_ticket = any("nhật ký" in d.title.casefold() or "ticket" in d.title.casefold() for d in cited_docs)
-        has_report_or_policy = any(
-            any(w in d.title.casefold() for w in ("báo cáo", "quy định", "chính sách", "hướng dẫn", "sổ tay", "văn bản"))
-            for d in cited_docs
-        )
-        if has_ticket and not has_report_or_policy:
+        has_report = any("báo cáo" in d.title.casefold() for d in cited_docs)
+        if has_ticket and not has_report:
+            topic = ""
+            for d in cited_docs:
+                for sep in (" — ", " - "):
+                    if sep in d.title:
+                        t = d.title.split(sep)[0].strip()
+                        if "nhật ký" not in t.casefold() and "ticket" not in t.casefold():
+                            topic = t
+                            break
+                if topic:
+                    break
+            query_hint = f"báo cáo {topic}".strip() if topic else "báo cáo đổi trả hoàn tiền"
             return (
-                f"Tài liệu bạn vừa trích ({cited_docs[0].title}) chỉ là một nhật ký sự vụ/ticket đơn lẻ, "
-                "không phải văn bản quy định hay báo cáo tổng hợp chính thức. "
-                "Hãy gọi ACTION search để tìm văn bản báo cáo hoặc quy định/chính sách chính thức "
-                "(ví dụ tìm kiếm với từ khóa 'báo cáo' hoặc tên chính sách/quy định liên quan, đặt k: 8) "
-                "rồi gọi fetch_doc đọc văn bản đó trước khi đưa ra kết luận FINAL."
+                f"Tài liệu bạn vừa trích ({cited_docs[0].title}) chỉ là một nhật ký sự vụ/ticket đơn lẻ hoặc quy định chung. "
+                f"Để trả lời đầy đủ thực tế xử lý các trường hợp, cần có số liệu từ báo cáo tổng hợp nội bộ. "
+                f"Hãy gọi ACTION search để tìm văn bản báo cáo liên quan (ví dụ tìm '{query_hint}' với k: 8), "
+                f"rồi gọi fetch_doc đọc báo cáo đó trước khi đưa ra kết luận FINAL."
             )
         return None
 
@@ -818,6 +841,88 @@ class ReActAgent:
             )
         return None
 
+    def _needs_unfetched_core_doc_nudge(self, ctx, report) -> str | None:
+        """Check if the model is abstaining or missing facts while an authoritative
+        'Văn bản chính thức' or 'Báo cáo' on the topic appeared in search results but was never fetched.
+        """
+        if self._unfetched_core_doc_nudge_requested or not self._is_real_model:
+            return None
+        if not isinstance(report, dict) or ctx.corpus is None:
+            return None
+        claims = report.get("claims", [])
+        if not report.get("abstain") and claims:
+            core_claims = [
+                c for c in claims if isinstance(c, dict) and c.get("doc_id")
+                and any(w in ctx.corpus.get(c["doc_id"]).title.casefold() for w in ("văn bản chính thức", "báo cáo", "hướng dẫn", "sổ tay"))
+                if ctx.corpus.get(c.get("doc_id"))
+            ]
+            if core_claims:
+                return None
+
+        # Find all doc_ids that appeared in search results
+        searched_doc_ids = []
+        for obs in ctx.observations:
+            for match in re.finditer(r"\b(doc-\d{4})\b:\s*([^\n]+)", obs):
+                did, title = match.group(1), match.group(2)
+                searched_doc_ids.append((did, title))
+
+        # Find doc_ids that were actually fetched
+        fetched_doc_ids = set()
+        for msg in ctx.messages:
+            if msg.get("role") == "assistant":
+                text = msg.get("content", "")
+                for m in re.finditer(r'"tool":\s*"fetch_doc"[^}]*"doc_id":\s*"(doc-\d{4})"', text):
+                    fetched_doc_ids.add(m.group(1))
+                for m in re.finditer(r'"doc_id":\s*"(doc-\d{4})"[^}]*"tool":\s*"fetch_doc"', text):
+                    fetched_doc_ids.add(m.group(1))
+
+        # Look for unfetched core doc in search results
+        for did, title in searched_doc_ids:
+            if did not in fetched_doc_ids:
+                doc = ctx.corpus.get(did)
+                if not doc:
+                    continue
+                t_lower = doc.title.casefold()
+                if any(k in t_lower for k in ("văn bản chính thức", "báo cáo")):
+                    return (
+                        f"Trong kết quả tìm kiếm đã có tài liệu quan trọng: '{doc.title}' (mã {did}) nhưng bạn chưa đọc toàn văn. "
+                        f"Hãy thực hiện ACTION gọi fetch_doc cho {did} để đọc văn bản này trước khi đưa ra kết luận."
+                    )
+        return None
+
+    def _needs_report_quote_nudge(self, ctx, report) -> str | None:
+        """Check if the real model fetched an incident report with statistics / handling status
+        but forgot to include its summary line in the claims.
+        """
+        if self._report_quote_nudge_requested or not self._is_real_model:
+            return None
+        if not isinstance(report, dict) or ctx.corpus is None:
+            return None
+        claims = report.get("claims", [])
+        cited_ids = set()
+        for c in claims:
+            if isinstance(c, dict) and c.get("doc_id"):
+                cited_ids.add(c["doc_id"])
+
+        observed = ctx.observed_text
+        for doc in ctx.corpus.docs:
+            if (doc.body in observed or doc.doc_id in observed) and ("báo cáo" in doc.title.casefold() or "báo cáo nội bộ" in doc.body.casefold()):
+                for line in doc.body.splitlines():
+                    norm_line = line.casefold()
+                    if "trong kỳ báo cáo" in norm_line and "ghi nhận" in norm_line:
+                        if doc.doc_id not in cited_ids:
+                            first_words = " ".join(line.split()[:4])
+                            last_words = " ".join(line.split()[-4:])
+                            return (
+                                f"Trong các tài liệu bạn đã đọc có báo cáo tổng hợp: '{doc.title}' ({doc.doc_id}) "
+                                f"ghi nhận số liệu và tình hình xử lý các trường hợp thực tế. "
+                                f"Không gọi thêm công cụ. Dòng nguồn nguyên văn trong {doc.doc_id} bắt đầu từ '{first_words}' và kết thúc bằng '{last_words}'. "
+                                f"Hãy xem lại {doc.doc_id} trong lịch sử, chép NGUYÊN VĂN TOÀN BỘ CẢ DÒNG ĐÓ "
+                                f"(bắt đầu đúng từ '{first_words}' cho đến hết '{last_words}') "
+                                f"vào mảng claims với doc_id là {doc.doc_id}, giữ nguyên các claim khác nếu có, và viết lại dòng FINAL."
+                            )
+        return None
+
     def _needs_quote_expansion(self, ctx, report) -> str | None:
         """Whether a real model shortened a fetched source line once.
 
@@ -840,19 +945,23 @@ class ReActAgent:
                 continue
             if not isinstance(text, str) or not text.strip():
                 continue
+            norm_text = " ".join(text.split()).casefold()
             doc = ctx.corpus.get(doc_id) if isinstance(doc_id, str) else None
-            candidates = [doc] if (doc is not None and doc.body in observed) else []
-            if not any(text in line for d in candidates for line in d.body.splitlines()):
-                candidates = [d for d in ctx.corpus.docs if d.body in observed and text in d.body]
+            candidates = [doc] if (doc is not None and (doc.body in observed or doc.doc_id in observed)) else []
+            if not any(norm_text in " ".join(line.split()).casefold() for d in candidates for line in d.body.splitlines()):
+                candidates = [d for d in ctx.corpus.docs if (d.body in observed or d.doc_id in observed) and norm_text in " ".join(d.body.split()).casefold()]
             for d in candidates:
                 for line in d.body.splitlines():
-                    if text != line and text in line and len(line) <= 400:
-                        first_words = " ".join(line.split()[:5])
+                    norm_line = " ".join(line.split()).casefold()
+                    if norm_text != norm_line and norm_text in norm_line and len(line) <= 400:
+                        first_words = " ".join(line.split()[:4])
+                        last_words = " ".join(line.split()[-4:])
                         return (
-                            f"FINAL vừa rồi có claim thuộc {d.doc_id} bị thiếu phần đầu của dòng nguồn. "
-                            f"Không gọi thêm công cụ. Dòng nguồn đó trong {d.doc_id} bắt đầu bằng: '{first_words}...'. "
-                            f"Hãy xem lại nội dung {d.doc_id} trong lịch sử, chép NGUYÊN VĂN TOÀN BỘ DÒNG ĐÓ "
-                            f"(bắt đầu đúng từ '{first_words}' cho đến hết dấu chấm kết thúc dòng) "
+                            f"FINAL vừa rồi có claim thuộc {d.doc_id} chưa trích đủ trọn vẹn cả dòng nguồn "
+                            f"(đang bị thiếu câu ở đầu hoặc ở cuối). Không gọi thêm công cụ. "
+                            f"Dòng nguồn nguyên văn trong {d.doc_id} bắt đầu từ '{first_words}' và kết thúc bằng '{last_words}'. "
+                            f"Hãy xem lại {d.doc_id} trong lịch sử, chép NGUYÊN VĂN TOÀN BỘ CẢ DÒNG ĐÓ "
+                            f"(bắt đầu đúng từ '{first_words}' cho đến hết '{last_words}') "
                             f"vào trường text của claim, giữ nguyên doc_id {d.doc_id}, và viết lại dòng FINAL."
                         )
         return None
