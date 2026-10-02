@@ -79,16 +79,73 @@ class Critic(Middleware):
     name = "critic"
 
     def after_agent(self, ctx, report):
-        # TODO (§2): khoảng 10-25 dòng.
-        #  1. Lấy report["claims"]; nếu rỗng hoặc không phải list thì thôi.
-        #  2. Với mỗi claim: nếu claim["text"] có trong ctx.observed_text
-        #     -> giữ nguyên (KHÔNG sửa chữ).
-        #  3. Nếu không: thử tách câu ghép (trường hợp (c) ở docstring).
-        #     Tách được -> giữ cả hai nửa, mỗi nửa gắn doc_id của tài liệu
-        #     thật sự chứa nó, và đặt report["abstain"] = True.
-        #  4. Không tách được -> đây là bịa: bỏ claim đi.
-        #  5. Nếu không còn claim nào: report["abstain"] = True,
-        #     claims = [], citations = [], và viết lại "answer" nói rõ là
-        #     không đủ căn cứ.
-        #  6. Cập nhật report["citations"] cho khớp với claims còn lại.
-        return report  # <- mặc định KHÔNG LÀM GÌ: agent vẫn chạy được
+        claims = report.get("claims")
+        if not isinstance(claims, list) or not claims:
+            return report
+
+        observed = ctx.observed_text
+        kept = []
+        split_claim = False
+        for claim in claims:
+            text = claim.get("text") if isinstance(claim, dict) else None
+            if isinstance(text, str) and self._is_supported_by_observed(ctx, text):
+                kept.append(claim)
+                continue
+            parts = self._split_observed_claim(ctx, text, observed)
+            if parts:
+                kept.extend({**claim, "text": part, "doc_id": doc_id} for part, doc_id in parts)
+                split_claim = True
+
+        report["claims"] = kept
+        if split_claim:
+            report["abstain"] = True
+        if not kept:
+            report.update({
+                "answer": "Không đủ căn cứ để trả lời dựa trên các tài liệu đã quan sát.",
+                "abstain": True,
+                "citations": [],
+            })
+            return report
+        report["citations"] = sorted({
+            claim.get("doc_id") for claim in kept
+            if isinstance(claim, dict) and isinstance(claim.get("doc_id"), str)
+            and claim["doc_id"]
+        })
+        return report
+
+    @staticmethod
+    def _is_supported_by_observed(ctx, text: str) -> bool:
+        if not isinstance(text, str) or len(text.strip()) < 12:
+            return False
+        norm_text = " ".join(text.split()).casefold()
+        for obs in ctx.observations:
+            for line in obs.splitlines():
+                norm_line = " ".join(line.split()).casefold()
+                if norm_text in norm_line:
+                    return True
+        return False
+
+    @staticmethod
+    def _split_observed_claim(ctx, text, observed):
+        if not isinstance(text, str) or not observed or ctx.corpus is None:
+            return None
+        for index in range(len(text)):
+            if not text.startswith(" và ", index):
+                continue
+            left, right = text[:index], text[index + len(" và "):]
+            sources = []
+            for part in (left, right):
+                source = next(
+                    (
+                        doc for doc in ctx.corpus.docs
+                        if doc.body in observed
+                        and any(part in line for line in doc.body.splitlines())
+                    ),
+                    None,
+                )
+                if source is None:
+                    break
+                sources.append(source)
+            if len(sources) == 2 and sources[0].doc_id != sources[1].doc_id:
+                return [(left, sources[0].doc_id), (right, sources[1].doc_id)]
+        return None

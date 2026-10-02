@@ -104,12 +104,17 @@ you switch the addendum on, measure your own efficiency delta with
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
 
 from arena.model import (
     ARENA_SYSTEM_PROMPT,
+    ParsedOutput,
+    RealModel,
     TOOL_ERROR_PREFIX,
+    _ACTION_RE,
+    _THOUGHT_RE,
     parse_output,
 )
 from arena.tools import ToolResult
@@ -146,6 +151,16 @@ MAX_SEARCH_K = 20
 #: placeholder shape. Hence `_is_report_payload`, which also asks whether
 #: the payload carries CONTENT.
 REPORT_KEYS = ("answer", "claims", "abstain", "citations")
+
+#: A real endpoint sometimes shortens a fetched line to the phrase that answers
+#: the question. The scorer, however, may require terms later in that same
+#: line. Ask the model — never the harness — to emit the complete quotation.
+QUOTE_FIDELITY_NUDGE = (
+    "FINAL vừa rồi có claim bị CẮT NGẮN một phần dòng nguồn; lặp lại nguyên đoạn hiện tại sẽ không "
+    "được chấm điểm. Không gọi thêm công cụ. Hãy xem lại tài liệu đã fetch trong lịch sử, tìm dòng nguồn của claim "
+    "và chép NGUYÊN VĂN TỪ ĐẦU DÒNG ĐẾN HẾT DÒNG (bắt đầu đúng từ chữ cái đầu tiên của dòng đó trong tài liệu, "
+    "không bỏ sót câu nào ở đầu dòng hay cuối dòng) vào trường text của claim, giữ nguyên doc_id, và viết lại dòng FINAL."
+)
 
 #: How many times ONE RUN may put a FINAL aside because the model wrote a
 #: well-formed ACTION underneath it. Bounded on purpose: a model that
@@ -205,6 +220,8 @@ REAL_MODEL_PROMPT_ADDENDUM = """PHỤ LỤC GIAO THỨC — BẮT BUỘC. Nếu 
 A. PHẢI TÌM TRƯỚC KHI ĐƯỢC PHÉP NÓI "KHÔNG ĐỦ CĂN CỨ".
    Lượt đầu tiên của bạn luôn luôn là một ACTION gọi search. Không được kết
    luận ở lượt đầu tiên trong bất kỳ trường hợp nào.
+   Dòng ACTION luôn bắt đầu bằng ACTION: rồi đến đối tượng có khóa tool chỉ
+   tên công cụ (search hoặc fetch_doc) và khóa args chứa tham số của công cụ.
    Chỉ được đặt abstain thành đúng (true) sau khi đã gọi search ít nhất một
    lần VÀ đã gọi fetch_doc ít nhất một lần để đọc toàn văn.
    Câu hỏi thường KHÔNG dùng cùng từ ngữ với tài liệu chứa câu trả lời. Nếu
@@ -239,9 +256,10 @@ C. NỘI DUNG ĐỐI TƯỢNG JSON — MÔ TẢ BẰNG LỜI, KHÔNG CÓ MẪU �
    Tuyệt đối không chép lại phần mô tả định dạng này vào câu trả lời.
 
 D. MỖI PHẦN TỬ claims LÀ MỘT CÂU CHÉP NGUYÊN VĂN.
-   Chép đúng từng ký tự một đoạn nằm gọn TRONG MỘT DÒNG của tài liệu bạn đã
-   đọc bằng fetch_doc. Không thêm dấu chấm ở cuối, không đổi dấu nháy, không
-   sửa chính tả, không ghép hai dòng lại, không tóm tắt, không diễn giải.
+   Chép đúng từng ký tự TRỌN VẸN TOÀN BỘ MỘT DÒNG của tài liệu bạn đã đọc bằng
+   fetch_doc (từ đầu dòng đến cuối dòng chứa thông tin trả lời). Không tự ngắt
+   câu ở giữa dòng, không thêm dấu chấm ở cuối, không đổi dấu nháy, không sửa
+   chính tả, không ghép hai dòng lại, không tóm tắt, không diễn giải.
    Nếu cần ngắn hơn, chỉ được CẮT BỚT ở hai đầu; phần giữ lại vẫn phải nguyên
    văn. Mỗi câu trích không quá 400 ký tự. Cắt bớt là hợp lệ, viết lại thì mất
    điểm.
@@ -375,6 +393,82 @@ def _without_quoted_finals(text: str) -> str:
     return "\n".join(kept) if dropped else text
 
 
+def _repair_action(text: str, default_thought: str = "") -> ParsedOutput | None:
+    """Repair common real-model ACTION formatting anomalies.
+
+    A real model may emit flattened JSON such as:
+      ACTION: {"k": 5, "query": "..."}
+      ACTION: {"doc_id": "doc-0001"}
+      ACTION: {"expression": "2+2"}
+    or omit the nested 'args' dictionary:
+      ACTION: {"tool": "search", "query": "..."}
+    This recovers the intended tool and arguments without changing FINAL provenance.
+    """
+    match = _ACTION_RE.search(text)
+    if not match:
+        m = re.search(r"ACTION:[ \t]*(.+)$", text, re.MULTILINE | re.IGNORECASE)
+        if not m:
+            return None
+        match = m
+
+    raw_payload = match.group(1).strip()
+    try:
+        payload = json.loads(raw_payload)
+    except Exception:
+        m_json = re.search(r"\{.*\}", raw_payload)
+        if m_json:
+            try:
+                payload = json.loads(m_json.group(0))
+            except Exception:
+                return None
+        else:
+            return None
+
+    if not isinstance(payload, dict):
+        return None
+
+    thought = default_thought
+    if not thought:
+        t_match = _THOUGHT_RE.search(text)
+        if t_match:
+            thought = t_match.group(1).strip()
+
+    if isinstance(payload.get("tool"), str):
+        tool = payload["tool"]
+        args = payload.get("args")
+        if isinstance(args, dict):
+            return ParsedOutput(kind="action", thought=thought, tool=tool, args=args)
+        # Flattened args alongside tool
+        flat_args = {k: v for k, v in payload.items() if k != "tool"}
+        return ParsedOutput(kind="action", thought=thought, tool=tool, args=flat_args)
+
+    if "query" in payload:
+        return ParsedOutput(
+            kind="action",
+            thought=thought,
+            tool="search",
+            args={"query": str(payload.get("query", "")), "k": payload.get("k", 5)},
+        )
+
+    if "doc_id" in payload:
+        return ParsedOutput(
+            kind="action",
+            thought=thought,
+            tool="fetch_doc",
+            args={"doc_id": str(payload.get("doc_id", ""))},
+        )
+
+    if "expression" in payload:
+        return ParsedOutput(
+            kind="action",
+            thought=thought,
+            tool="calc",
+            args={"expression": str(payload.get("expression", ""))},
+        )
+
+    return None
+
+
 def _action_under_final(text: str):
     """A well-formed ACTION written BELOW this turn's FINAL line, or None.
 
@@ -387,8 +481,14 @@ def _action_under_final(text: str):
     lines = text.split("\n")
     for index, line in enumerate(lines):
         if line.startswith(_FINAL_MARKER):
-            below = parse_output("\n".join(lines[index + 1:]))
-            return below if below.kind == "action" else None
+            tail = "\n".join(lines[index + 1:])
+            below = parse_output(tail)
+            if below.kind == "action":
+                return below
+            repaired = _repair_action(tail, below.thought)
+            if repaired is not None and repaired.kind == "action":
+                return repaired
+            return None
     return None
 
 
@@ -480,13 +580,27 @@ class ReActAgent:
         # one already, so a caller that does not pass one still works.
         self.corpus = corpus if corpus is not None else getattr(tools, "_corpus", None)
         self.max_steps = max(1, int(max_steps))
-        self.system_prompt = system_prompt
+        inner_model = getattr(model, "inner", model)
+        self._is_real_model = isinstance(inner_model, RealModel)
+        self.system_prompt = (
+            real_model_system_prompt(system_prompt)
+            if self._is_real_model
+            and REAL_MODEL_PROMPT_ADDENDUM not in system_prompt
+            # `RunnerConfig(prompt_addendum=True)` has already supplied its
+            # compact, frozen real-model protocol.  Do not repeat a second,
+            # longer version of the same instructions: duplicated protocol
+            # text makes the live model spend more tokens and can obscure the
+            # one-turn budget nudge it needs to obey.
+            and "QUY TẮC BỔ SUNG (bắt buộc)" not in system_prompt
+            else system_prompt
+        )
         self.last_context: AgentContext | None = None
         # Per-run bookkeeping for the two `_parse` guards. Reset in
         # `run()`; kept on the agent rather than in `ctx.state`, which
         # belongs to the layers.
         self._final_deferrals = 0
         self._refused_final: dict | None = None
+        self._quote_expansion_requested = False
 
     # -- the run -------------------------------------------------------
 
@@ -503,6 +617,7 @@ class ReActAgent:
         self.last_context = ctx
         self._final_deferrals = 0
         self._refused_final = None
+        self._quote_expansion_requested = False
 
         self.trace.emit("agent_start", brief_id=str(brief.get("brief_id", "")))
 
@@ -532,6 +647,10 @@ class ReActAgent:
             ctx.messages.append({"role": "assistant", "content": text})
 
             if parsed.kind == "final":
+                if self._needs_quote_expansion(ctx, parsed.final):
+                    self._quote_expansion_requested = True
+                    ctx.messages.append({"role": "user", "content": QUOTE_FIDELITY_NUDGE})
+                    continue
                 report = parsed.final if isinstance(parsed.final, dict) else {}
                 ctx.stop_reason = "final"
                 break
@@ -558,6 +677,34 @@ class ReActAgent:
         # runner stamps its own `agent_end` with the timing it measured.
         self.trace.emit("agent_end", stop_reason=ctx.stop_reason, steps=ctx.step + 1)
         return report
+
+    def _needs_quote_expansion(self, ctx, report) -> bool:
+        """Whether a real model shortened a fetched source line once.
+
+        This is a model repair request, not evidence construction: no corpus
+        text is inserted into a report and only an actually fetched document is
+        considered. One repair turn keeps the path bounded.
+        """
+        if self._quote_expansion_requested or not self._is_real_model:
+            return False
+        claims = report.get("claims") if isinstance(report, dict) else None
+        if not isinstance(claims, list) or not claims or ctx.corpus is None:
+            return False
+        observed = ctx.observed_text
+        for claim in claims:
+            if not isinstance(claim, dict):
+                continue
+            text, doc_id = claim.get("text"), claim.get("doc_id")
+            if not isinstance(text, str) or not text.strip():
+                continue
+            doc = ctx.corpus.get(doc_id) if isinstance(doc_id, str) else None
+            candidates = [doc] if (doc is not None and doc.body in observed) else []
+            if not any(text in line for d in candidates for line in d.body.splitlines()):
+                candidates = [d for d in ctx.corpus.docs if d.body in observed and text in d.body]
+            for d in candidates:
+                if any(text != line and text in line and len(line) <= 400 for line in d.body.splitlines()):
+                    return True
+        return False
 
     # -- reading the model ---------------------------------------------
 
@@ -593,6 +740,11 @@ class ReActAgent:
         """
         parsed = parse_output(_canonicalise(text))
         if parsed.kind != "final":
+            if parsed.kind == "action":
+                return parsed
+            repaired = _repair_action(text, parsed.thought)
+            if repaired is not None and repaired.kind == "action":
+                return repaired
             return parsed
 
         if _is_report_payload(parsed.final):
@@ -610,7 +762,12 @@ class ReActAgent:
         # Strict, NOT canonicalised: normalisation is what resurrects a
         # non-canonical marker such as `final: {}` in the first place, and
         # this path exists precisely to look underneath one.
-        return parse_output(_without_quoted_finals(text))
+        fallback = parse_output(_without_quoted_finals(text))
+        if fallback.kind != "action":
+            repaired = _repair_action(text, fallback.thought)
+            if repaired is not None and repaired.kind == "action":
+                return repaired
+        return fallback
 
     # -- the model -----------------------------------------------------
 
@@ -651,8 +808,9 @@ class ReActAgent:
             # rather than guessing — a real model that drifts off the
             # protocol needs to be told, and the mock never gets here.
             return (
-                f"{TOOL_ERROR_PREFIX} không đọc được ACTION. Hãy trả lời đúng định dạng "
-                "THOUGHT/ACTION hoặc THOUGHT/FINAL."
+                f"{TOOL_ERROR_PREFIX} không đọc được ACTION. Hãy gọi công cụ theo đúng định dạng: "
+                'ACTION: {"tool": "search", "args": {"query": "...", "k": 5}} hoặc '
+                'ACTION: {"tool": "fetch_doc", "args": {"doc_id": "doc-0001"}} hoặc viết THOUGHT/FINAL.'
             )
 
         call = self.middleware.wrap_tool_call(ctx, self._dispatch)
