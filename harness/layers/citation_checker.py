@@ -72,6 +72,16 @@ class CitationChecker(Middleware):
         if not isinstance(claims, list) or ctx.corpus is None:
             return report
 
+        # Normalize any string claims emitted by real LLMs into structured dicts
+        norm_claims = []
+        for claim in claims:
+            if isinstance(claim, str) and claim.strip():
+                norm_claims.append({"text": claim.strip(), "doc_id": ""})
+            elif isinstance(claim, dict):
+                norm_claims.append(claim)
+        claims = norm_claims
+        report["claims"] = claims
+
         observed = ctx.observed_text
         for claim in claims:
             if not isinstance(claim, dict) or not isinstance(claim.get("text"), str):

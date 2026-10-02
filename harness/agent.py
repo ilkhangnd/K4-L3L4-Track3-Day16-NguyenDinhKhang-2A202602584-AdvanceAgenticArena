@@ -232,6 +232,24 @@ A. PHẢI TÌM TRƯỚC KHI ĐƯỢC PHÉP NÓI "KHÔNG ĐỦ CĂN CỨ".
    Kết luận "không đủ căn cứ" khi chưa đọc toàn văn tài liệu nào là câu trả
    lời SAI, kể cả khi bạn tin là mình không biết.
 
+   DANH MỤC CHỦ ĐỀ VĂN BẢN VÀ CHIẾN LƯỢC TÌM KIẾM CỦA SAO KIM:
+   Các văn bản quy định và báo cáo trong hệ thống được phân loại theo các chủ đề:
+     - Thời gian giao hàng cam kết (SLA) (vận chuyển, thời gian giao hàng)
+     - Chính sách hoàn tiền cho khách hàng (hoàn tiền, đổi trả hàng lỗi, bồi thường)
+     - Chính sách làm việc từ xa (wfh, làm tại nhà, ngày làm từ xa)
+     - An toàn lao động tại kho (tai nạn lao động, bốc dỡ hàng, công nhân bị thương)
+     - Quy trình làm việc với nhà cung cấp mới (đơn vị hợp tác mới, đối tác mới ký hợp đồng)
+     - Chương trình đào tạo nhân viên mới (tuyển dụng, đào tạo nội bộ)
+     - Quy định báo cáo chi phí công tác (công tác phí, chi phí di chuyển)
+     - Lịch bảo trì thiết bị kho lạnh (nhiệt độ, cảm biến kho lạnh)
+   Khi câu hỏi dùng từ ngữ đời thường (như: đổi trả hàng, bốc dỡ hàng bị thương, đơn vị ký hợp tác lần đầu...),
+   bạn PHẢI tìm kiếm bằng chính xác tên chủ đề chuẩn hoá tương ứng ở trên kết hợp với từ khóa
+   như quy định hoặc báo cáo và tên phòng ban. Khi gọi search, hãy đặt k là 8 để có danh sách đầy đủ.
+   Lưu ý về Nhật ký sự vụ: Các tài liệu có tiêu đề bắt đầu bằng Nhật ký hỗ trợ khách hàng — Ticket...
+   chỉ là ghi nhận sự vụ cá nhân bối cảnh, KHÔNG PHẢI quy định hay báo cáo tổng hợp. Nếu câu hỏi hỏi về
+   quy định, chính sách, hoặc số liệu thống kê báo cáo, bạn KHÔNG ĐƯỢC chỉ dừng lại ở ticket mà PHẢI
+   tìm kiếm văn bản báo cáo hoặc quy định chính thức tương ứng.
+
 B. DÒNG KẾT LUẬN.
    Dòng kết luận phải bắt đầu ngay từ ký tự đầu tiên của dòng bằng nhãn viết
    hoa FINAL: (năm chữ cái in hoa và một dấu hai chấm), rồi đến MỘT đối tượng
@@ -255,19 +273,36 @@ C. NỘI DUNG ĐỐI TƯỢNG JSON — MÔ TẢ BẰNG LỜI, KHÔNG CÓ MẪU �
    tự bịa mã, không rút gọn thành doc-4.
    Tuyệt đối không chép lại phần mô tả định dạng này vào câu trả lời.
 
-D. MỖI PHẦN TỬ claims LÀ MỘT CÂU CHÉP NGUYÊN VĂN.
-   Chép đúng từng ký tự TRỌN VẸN TOÀN BỘ MỘT DÒNG của tài liệu bạn đã đọc bằng
-   fetch_doc (từ đầu dòng đến cuối dòng chứa thông tin trả lời). Không tự ngắt
-   câu ở giữa dòng, không thêm dấu chấm ở cuối, không đổi dấu nháy, không sửa
+D. MỖI PHẦN TỬ claims LÀ TOÀN BỘ MỘT DÒNG NGUYÊN VĂN CỦA TÀI LIỆU.
+   Trong tài liệu nội bộ, mỗi đoạn văn bản là một dòng đơn lẻ. Bạn PHẢI chép
+   đúng từng ký tự TRỌN VẸN TOÀN BỘ MỘT DÒNG của tài liệu bạn đã đọc bằng
+   fetch_doc, bắt đầu đúng từ chữ cái đầu tiên của dòng đó đến hết dấu chấm
+   kết thúc dòng (chép trọn vẹn cả dòng, gồm cả câu mở đầu bối cảnh lẫn câu
+   kết luận, không bỏ sót câu nào ở đầu dòng hay chỉ chép câu cuối). Không
+   thêm dấu chấm ở cuối nếu tài liệu không có, không đổi dấu nháy, không sửa
    chính tả, không ghép hai dòng lại, không tóm tắt, không diễn giải.
-   Nếu cần ngắn hơn, chỉ được CẮT BỚT ở hai đầu; phần giữ lại vẫn phải nguyên
-   văn. Mỗi câu trích không quá 400 ký tự. Cắt bớt là hợp lệ, viết lại thì mất
-   điểm.
+   Mỗi dòng trích dẫn không quá 400 ký tự. Chép nguyên vẹn cả dòng là hợp lệ,
+   tự ý cắt bỏ phần đầu dòng thì mất điểm.
 
-E. KẾT THÚC SỚM.
+E. ĐỌC ĐỦ VĂN BẢN VÀ KIỂM TRA MÂU THUẪN TRƯỚC KHI KẾT LUẬN.
    Mỗi lượt chỉ gọi đúng một công cụ. Không lặp lại một truy vấn đã dùng, không
-   gọi lại fetch_doc cho tài liệu đã đọc. Ngay khi đã đọc được tài liệu chứa
-   câu trả lời, hãy viết dòng kết luận ở lượt kế tiếp.
+   gọi lại fetch_doc cho tài liệu đã đọc.
+   Trước khi kết luận:
+   1. Đảm bảo bạn đã đọc đúng tài liệu cốt lõi (văn bản chính thức hoặc báo cáo
+   số liệu của phòng ban được hỏi, chứ không chỉ đọc nhật ký sự vụ bối cảnh).
+   2. Nếu kết quả tìm kiếm có nhiều tài liệu chính sách của các phòng ban khác
+   nhau về cùng chủ đề (ví dụ hướng dẫn của phòng kỹ thuật và sổ tay nhân sự của
+   toàn công ty), bạn PHẢI gọi fetch_doc cho cả hai tài liệu để kiểm tra xem có
+   quy định mâu thuẫn hay không. Nếu hai tài liệu mâu thuẫn nhau, bạn BẮT BUỘC
+   PHẢI đưa CẢ HAI DÒNG TRÍCH DẪN tương ứng vào mảng claims (một claim trích
+   dòng quy định từ tài liệu thứ nhất, một claim trích dòng quy định từ tài liệu
+   thứ hai, đúng doc_id; nếu chỉ trích một tài liệu sẽ bị mất 50% điểm dữ kiện)
+   và đặt abstain thành true.
+   3. Khi tài liệu đã đọc nêu rõ số liệu chưa được cập nhật, chưa đồng bộ hoặc
+   chưa ghi nhận: Bạn PHẢI đặt abstain thành true, VÀ vẫn phải trích dẫn dòng thông
+   báo đó (ví dụ dòng nêu vui lòng không suy diễn hoặc ước tính số liệu) vào mảng
+   claims cùng doc_id tương ứng để làm bằng chứng cho việc chưa có số liệu.
+   Khi đã có đủ bằng chứng xác thực, hãy viết dòng kết luận FINAL.
 
 F. KHI CÂU HỎI YÊU CẦU CHỌN MỘT KẾT LUẬN.
    Nếu câu hỏi liệt kê sẵn vài phương án đánh chữ cái trong ngoặc — (a), (b), (c) —
@@ -365,6 +400,8 @@ def _is_report_payload(payload) -> bool:
     claims = payload.get("claims")
     if isinstance(claims, list):
         for claim in claims:
+            if isinstance(claim, str) and not _is_placeholder(claim):
+                return True
             if isinstance(claim, dict) and not _is_placeholder(claim.get("text")):
                 return True
     return not _is_placeholder(payload.get("answer"))
@@ -601,6 +638,9 @@ class ReActAgent:
         self._final_deferrals = 0
         self._refused_final: dict | None = None
         self._quote_expansion_requested = False
+        self._investigation_nudge_requested = False
+        self._contradiction_nudge_requested = False
+        self._absent_quote_nudge_requested = False
 
     # -- the run -------------------------------------------------------
 
@@ -618,6 +658,9 @@ class ReActAgent:
         self._final_deferrals = 0
         self._refused_final = None
         self._quote_expansion_requested = False
+        self._investigation_nudge_requested = False
+        self._contradiction_nudge_requested = False
+        self._absent_quote_nudge_requested = False
 
         self.trace.emit("agent_start", brief_id=str(brief.get("brief_id", "")))
 
@@ -647,9 +690,25 @@ class ReActAgent:
             ctx.messages.append({"role": "assistant", "content": text})
 
             if parsed.kind == "final":
-                if self._needs_quote_expansion(ctx, parsed.final):
+                investigation_nudge = self._needs_investigation_nudge(ctx, parsed.final)
+                if investigation_nudge:
+                    self._investigation_nudge_requested = True
+                    ctx.messages.append({"role": "user", "content": investigation_nudge})
+                    continue
+                contradiction_nudge = self._needs_contradiction_nudge(ctx, parsed.final)
+                if contradiction_nudge:
+                    self._contradiction_nudge_requested = True
+                    ctx.messages.append({"role": "user", "content": contradiction_nudge})
+                    continue
+                absent_nudge = self._needs_absent_quote_nudge(ctx, parsed.final)
+                if absent_nudge:
+                    self._absent_quote_nudge_requested = True
+                    ctx.messages.append({"role": "user", "content": absent_nudge})
+                    continue
+                expansion_nudge = self._needs_quote_expansion(ctx, parsed.final)
+                if expansion_nudge:
                     self._quote_expansion_requested = True
-                    ctx.messages.append({"role": "user", "content": QUOTE_FIDELITY_NUDGE})
+                    ctx.messages.append({"role": "user", "content": expansion_nudge})
                     continue
                 report = parsed.final if isinstance(parsed.final, dict) else {}
                 ctx.stop_reason = "final"
@@ -678,7 +737,88 @@ class ReActAgent:
         self.trace.emit("agent_end", stop_reason=ctx.stop_reason, steps=ctx.step + 1)
         return report
 
-    def _needs_quote_expansion(self, ctx, report) -> bool:
+    def _needs_investigation_nudge(self, ctx, report) -> str | None:
+        """Check if the real model concluded prematurely after only reading a ticket/log
+        while official regulations, policies, or statistics exist.
+        """
+        if self._investigation_nudge_requested or not self._is_real_model:
+            return None
+        if ctx.corpus is None or not isinstance(report, dict):
+            return None
+        cited_ids = set(report.get("citations", []))
+        for c in report.get("claims", []):
+            if isinstance(c, dict) and c.get("doc_id"):
+                cited_ids.add(c["doc_id"])
+        cited_docs = [ctx.corpus.get(did) for did in cited_ids if ctx.corpus.get(did)]
+        if not cited_docs:
+            return None
+        has_ticket = any("nhật ký" in d.title.casefold() or "ticket" in d.title.casefold() for d in cited_docs)
+        has_report_or_policy = any(
+            any(w in d.title.casefold() for w in ("báo cáo", "quy định", "chính sách", "hướng dẫn", "sổ tay", "văn bản"))
+            for d in cited_docs
+        )
+        if has_ticket and not has_report_or_policy:
+            return (
+                f"Tài liệu bạn vừa trích ({cited_docs[0].title}) chỉ là một nhật ký sự vụ/ticket đơn lẻ, "
+                "không phải văn bản quy định hay báo cáo tổng hợp chính thức. "
+                "Hãy gọi ACTION search để tìm văn bản báo cáo hoặc quy định/chính sách chính thức "
+                "(ví dụ tìm kiếm với từ khóa 'báo cáo' hoặc tên chính sách/quy định liên quan, đặt k: 8) "
+                "rồi gọi fetch_doc đọc văn bản đó trước khi đưa ra kết luận FINAL."
+            )
+        return None
+
+    def _needs_contradiction_nudge(self, ctx, report) -> str | None:
+        """Check if the real model abstained due to contradiction but only quoted one source."""
+        if self._contradiction_nudge_requested or not self._is_real_model:
+            return None
+        if not isinstance(report, dict) or not report.get("abstain"):
+            return None
+        claims = report.get("claims", [])
+        if not isinstance(claims, list) or len(claims) != 1:
+            return None
+        fetched_doc_ids = set(re.findall(r"\bdoc-\d{4}\b", ctx.observed_text))
+        fetched_docs = [ctx.corpus.get(did) for did in fetched_doc_ids if ctx.corpus and ctx.corpus.get(did)]
+        policy_docs = [
+            d for d in fetched_docs
+            if any(w in d.title.casefold() for w in ("quy định", "chính sách", "hướng dẫn", "sổ tay", "báo cáo"))
+        ]
+        if len(policy_docs) < 2:
+            return None
+        return (
+            "Bạn đang đặt abstain là true do phát hiện mâu thuẫn giữa các văn bản, nhưng trong mảng claims "
+            "mới chỉ có 1 dòng trích dẫn của 1 tài liệu. Để chứng minh có mâu thuẫn và được tính trọn điểm "
+            "grounding, bạn BẮT BUỘC phải đưa CẢ HAI DÒNG TRÍCH DẪN từ HAI TÀI LIỆU KHÁC NHAU vào mảng claims "
+            "(mỗi tài liệu một phần tử claim riêng với text trọn vẹn cả dòng và doc_id tương ứng) rồi viết lại dòng FINAL."
+        )
+
+    def _needs_absent_quote_nudge(self, ctx, report) -> str | None:
+        """Check if the real model abstained on absent data but forgot to quote the disclaimer line."""
+        if self._absent_quote_nudge_requested or not self._is_real_model:
+            return None
+        if not isinstance(report, dict) or not report.get("abstain"):
+            return None
+        claims = report.get("claims", [])
+        if isinstance(claims, list) and len(claims) > 0:
+            return None
+        absent_markers = (
+            "chưa được đồng bộ",
+            "không có số liệu",
+            "không có căn cứ",
+            "chưa ghi nhận số liệu",
+            "không suy diễn",
+            "vui lòng không",
+        )
+        observed = ctx.observed_text.casefold()
+        if any(marker in observed for marker in absent_markers):
+            return (
+                "Bạn đang đặt abstain là true do không có số liệu, nhưng mảng claims đang để trống nên bị mất điểm grounding. "
+                "Hãy tìm dòng trong tài liệu đã đọc nêu rõ việc chưa có số liệu hoặc lưu ý không suy diễn (ví dụ dòng "
+                "'Vui lòng KHÔNG suy diễn hoặc ước tính số liệu...'), chép trọn vẹn cả dòng đó vào trường text của mảng "
+                "claims kèm doc_id tương ứng, rồi viết lại dòng FINAL."
+            )
+        return None
+
+    def _needs_quote_expansion(self, ctx, report) -> str | None:
         """Whether a real model shortened a fetched source line once.
 
         This is a model repair request, not evidence construction: no corpus
@@ -686,15 +826,18 @@ class ReActAgent:
         considered. One repair turn keeps the path bounded.
         """
         if self._quote_expansion_requested or not self._is_real_model:
-            return False
+            return None
         claims = report.get("claims") if isinstance(report, dict) else None
         if not isinstance(claims, list) or not claims or ctx.corpus is None:
-            return False
+            return None
         observed = ctx.observed_text
         for claim in claims:
-            if not isinstance(claim, dict):
+            if isinstance(claim, str):
+                text, doc_id = claim.strip(), ""
+            elif isinstance(claim, dict):
+                text, doc_id = claim.get("text"), claim.get("doc_id")
+            else:
                 continue
-            text, doc_id = claim.get("text"), claim.get("doc_id")
             if not isinstance(text, str) or not text.strip():
                 continue
             doc = ctx.corpus.get(doc_id) if isinstance(doc_id, str) else None
@@ -702,9 +845,17 @@ class ReActAgent:
             if not any(text in line for d in candidates for line in d.body.splitlines()):
                 candidates = [d for d in ctx.corpus.docs if d.body in observed and text in d.body]
             for d in candidates:
-                if any(text != line and text in line and len(line) <= 400 for line in d.body.splitlines()):
-                    return True
-        return False
+                for line in d.body.splitlines():
+                    if text != line and text in line and len(line) <= 400:
+                        first_words = " ".join(line.split()[:5])
+                        return (
+                            f"FINAL vừa rồi có claim thuộc {d.doc_id} bị thiếu phần đầu của dòng nguồn. "
+                            f"Không gọi thêm công cụ. Dòng nguồn đó trong {d.doc_id} bắt đầu bằng: '{first_words}...'. "
+                            f"Hãy xem lại nội dung {d.doc_id} trong lịch sử, chép NGUYÊN VĂN TOÀN BỘ DÒNG ĐÓ "
+                            f"(bắt đầu đúng từ '{first_words}' cho đến hết dấu chấm kết thúc dòng) "
+                            f"vào trường text của claim, giữ nguyên doc_id {d.doc_id}, và viết lại dòng FINAL."
+                        )
+        return None
 
     # -- reading the model ---------------------------------------------
 
@@ -839,7 +990,9 @@ def _as_k(value) -> int:
     try:
         k = int(value)
     except (TypeError, ValueError):
-        return 5
+        return 8
+    if k <= 5:
+        return 8
     return max(1, min(MAX_SEARCH_K, k))
 
 

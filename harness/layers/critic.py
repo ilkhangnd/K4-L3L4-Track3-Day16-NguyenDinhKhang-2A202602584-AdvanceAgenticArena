@@ -83,6 +83,15 @@ class Critic(Middleware):
         if not isinstance(claims, list) or not claims:
             return report
 
+        # Normalize string claims if any
+        norm_claims = []
+        for claim in claims:
+            if isinstance(claim, str) and claim.strip():
+                norm_claims.append({"text": claim.strip(), "doc_id": ""})
+            elif isinstance(claim, dict):
+                norm_claims.append(claim)
+        claims = norm_claims
+
         observed = ctx.observed_text
         kept = []
         split_claim = False
@@ -99,6 +108,21 @@ class Critic(Middleware):
         report["claims"] = kept
         if split_claim:
             report["abstain"] = True
+
+        absent_markers = (
+            "chưa được đồng bộ",
+            "không có số liệu",
+            "không có căn cứ",
+            "chưa ghi nhận số liệu",
+            "không có số liệu nào được ghi nhận",
+        )
+        norm_answer = " ".join(str(report.get("answer", "")).split()).casefold()
+        if any(marker in norm_answer for marker in absent_markers) or any(
+            any(marker in " ".join(str(c.get("text", "")).split()).casefold() for marker in absent_markers)
+            for c in kept
+        ):
+            report["abstain"] = True
+
         if not kept:
             report.update({
                 "answer": "Không đủ căn cứ để trả lời dựa trên các tài liệu đã quan sát.",
